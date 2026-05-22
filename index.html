@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conciliador de Cuentas</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React y dependencias -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Firebase SDK Modules -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+        
+        window.FirebaseSDK = { 
+            initializeApp, getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, 
+            getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc 
+        };
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        window.addEventListener('load', () => {
+            const { useState, useMemo, useEffect } = React;
+            const { initializeApp, getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } = window.FirebaseSDK;
+            
+            // ==========================================
+            // COMPONENTE DE ÍCONOS NATIVOS
+            // Evita dependencias externas y errores de React
+            // ==========================================
+            const Icon = ({ name, className }) => {
+              const svgs = {
+                Wallet: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>,
+                User: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+                Lock: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+                Eye: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>,
+                ChevronLeft: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6"/></svg>,
+                LogIn: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" x2="3" y1="12" y2="12"/></svg>,
+                LogOut: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>,
+                TrendingUp: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
+                Receipt: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></svg>,
+                ArrowRightLeft: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>,
+                PlusCircle: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>,
+                ArrowUpRight: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>,
+                ArrowDownRight: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M7 17h10V7"/><path d="M7 7l10 10"/></svg>,
+                Trash2: <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+              };
+              return svgs[name] || null;
+            };
+
+            // ==========================================
+            // CONFIGURACIÓN DE FIREBASE
+            // ==========================================
+            const firebaseConfig = {
+              apiKey: "AIzaSyDLbCgA1WE4jX1xbM3rQxQkJyEmcxQ0Jq4",
+              authDomain: "conciliadordegastos.firebaseapp.com",
+              projectId: "conciliadordegastos",
+              storageBucket: "conciliadordegastos.firebasestorage.app",
+              messagingSenderId: "582213473102",
+              appId: "1:582213473102:web:83a62cfd183a1f2532c41f"
+            };
+
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+
+            // ==========================================
+            // MAPEO DE CORREOS A PERFILES Y ROLES
+            // ==========================================
+            const PROFILES = {
+              'marcocueva@gmail.com': { id: 'marco', name: 'Marco', role: 'editor' },
+              'eliana@ejemplo.com': { id: 'eliana', name: 'Eliana', role: 'viewer' },
+              'gaby@ejemplo.com': { id: 'guest', name: 'Invitado / Gaby', role: 'viewer' }
+            };
+
+            function App() {
+              const [firebaseUser, setFirebaseUser] = useState(null);
+              const [currentUser, setCurrentUser] = useState(null);
+              const [isLoading, setIsLoading] = useState(true);
+
+              const [email, setEmail] = useState('');
+              const [password, setPassword] = useState('');
+              const [authError, setAuthError] = useState('');
+
+              const [transactions, setTransactions] = useState([]);
+              const [txToDelete, setTxToDelete] = useState(null);
+
+              const [activeTab, setActiveTab] = useState('expense');
+              const [amount, setAmount] = useState('');
+              const [description, setDescription] = useState('');
+              const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+              const [paidBy, setPaidBy] = useState('Marco');
+              const [splitType, setSplitType] = useState('shared');
+
+              useEffect(() => {
+                if (currentUser?.id === 'marco') setPaidBy('Marco');
+                if (currentUser?.id === 'eliana') setPaidBy('Eliana');
+              }, [currentUser]);
+
+              useEffect(() => {
+                const unsubscribe = onAuthStateChanged(auth, (user) => {
+                  if (user) {
+                    setFirebaseUser(user);
+                    const profileInfo = PROFILES[user.email.toLowerCase()] || { id: 'guest', name: user.email, role: 'viewer' };
+                    setCurrentUser(profileInfo);
+                  } else {
+                    setFirebaseUser(null);
+                    setCurrentUser(null);
+                  }
+                });
+                return () => unsubscribe();
+              }, []);
+
+              useEffect(() => {
+                if (!firebaseUser) return;
+                
+                const unsubscribe = onSnapshot(collection(db, 'movimientos'), (snapshot) => {
+                  const data = [];
+                  snapshot.forEach(document => {
+                    data.push({ id: document.id, ...document.data() });
+                  });
+                  data.sort((a, b) => new Date(b.date) - new Date(a.date));
+                  setTransactions(data);
+                  setIsLoading(false);
+                }, (error) => {
+                  console.error("Error obteniendo datos:", error);
+                  setIsLoading(false);
+                });
+
+                return () => unsubscribe();
+              }, [firebaseUser]);
+
+              const { totalGastado, marcoBalance, marcoGastos, elianaGastos } = useMemo(() => {
+                let balance = 0;
+                let mGastos = 0;
+                let eGastos = 0;
+
+                transactions.forEach(t => {
+                  const amt = parseFloat(t.amount);
+                  if (t.type === 'expense') {
+                    if (t.paidBy === 'Marco') {
+                      mGastos += amt;
+                      if (t.splitType === 'shared') balance += amt / 2;
+                    } else {
+                      eGastos += amt;
+                      if (t.splitType === 'shared') balance -= amt / 2;
+                    }
+                  } else if (t.type === 'payment') {
+                    if (t.paidBy === 'Eliana') balance -= amt;
+                    else balance += amt;
+                  }
+                });
+
+                return {
+                  totalGastado: mGastos + eGastos,
+                  marcoBalance: balance,
+                  marcoGastos: mGastos,
+                  elianaGastos: eGastos
+                };
+              }, [transactions]);
+
+              const handleLogin = async (e) => {
+                e.preventDefault();
+                setAuthError('');
+                try {
+                  await signInWithEmailAndPassword(auth, email, password);
+                } catch (error) {
+                  const code = error.code;
+                  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+                      setAuthError('El correo o la contraseña son incorrectos.');
+                  } else if (code === 'auth/too-many-requests') {
+                      setAuthError('Demasiados intentos. Tu cuenta ha sido bloqueada temporalmente.');
+                  } else if (code === 'auth/invalid-email') {
+                      setAuthError('El formato del correo electrónico no es válido.');
+                  } else if (code === 'auth/network-request-failed') {
+                      setAuthError('Error de red. Verifica tu conexión a internet.');
+                  } else {
+                      setAuthError('Ocurrió un error inesperado al iniciar sesión.');
+                  }
+                }
+              };
+
+              const handleLogout = () => {
+                signOut(auth);
+              };
+
+              const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!amount || !description || isNaN(amount)) return;
+                if (currentUser?.role !== 'editor' || !firebaseUser) return;
+
+                const newTxId = Date.now().toString();
+                const newTx = {
+                  type: activeTab,
+                  paidBy: paidBy,
+                  amount: parseFloat(amount),
+                  description,
+                  date,
+                  splitType: activeTab === 'expense' ? splitType : null,
+                  createdAt: new Date().toISOString(),
+                  createdBy: currentUser.name
+                };
+
+                try {
+                  await setDoc(doc(db, 'movimientos', newTxId), newTx);
+                  setAmount('');
+                  setDescription('');
+                  setSplitType('shared');
+                } catch (error) {
+                  console.error("Error al guardar en la nube:", error);
+                }
+              };
+
+              const deleteTransaction = (id) => {
+                if (currentUser?.role !== 'editor' || !firebaseUser) return;
+                setTxToDelete(id);
+              };
+
+              const confirmDelete = async (id) => {
+                try {
+                  await deleteDoc(doc(db, 'movimientos', id));
+                  setTxToDelete(null);
+                } catch (error) {
+                  console.error("Error al eliminar:", error);
+                }
+              };
+
+              const formatMoney = (val) => `S/. ${Math.abs(val).toFixed(2)}`;
+
+              if (!currentUser) {
+                return (
+                  <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+                    <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-100 max-w-md w-full text-center">
+                      <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Icon name="Wallet" className="w-8 h-8" />
+                      </div>
+                      <h1 className="text-2xl font-bold text-slate-800 mb-2">CONCILIADOR DE CUENTAS</h1>
+                      <p className="text-slate-500 mb-8">Ingresa tus credenciales de acceso</p>
+
+                      <form onSubmit={handleLogin} className="space-y-4">
+                        <div>
+                          <input 
+                            type="email"
+                            required
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            placeholder="Correo electrónico"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-left"
+                          />
+                        </div>
+                        <div>
+                          <input 
+                            type="password"
+                            required
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            placeholder="Contraseña"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-left"
+                          />
+                        </div>
+                        
+                        <p className="text-red-500 text-xs font-medium text-left min-h-[16px]">
+                          {authError}
+                        </p>
+                        
+                        <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition-colors mt-2 flex justify-center items-center gap-2">
+                          <Icon name="LogIn" className="w-4 h-4" /> Iniciar Sesión
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-12">
+                  <header className="bg-blue-600 text-white p-6 shadow-md sticky top-0 z-10">
+                    <div className="max-w-4xl mx-auto flex items-center justify-between">
+                      <div>
+                        <h1 className="text-2xl font-bold flex items-center gap-2">
+                          <Icon name="Wallet" className="w-6 h-6" />
+                          CONCILIADOR DE CUENTAS
+                        </h1>
+                        <p className="text-blue-100 text-sm mt-1">Control de gastos</p>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="hidden sm:block text-right">
+                          <p className="text-sm font-medium">{currentUser.name}</p>
+                          <p className="text-xs text-blue-200">{currentUser.role === 'editor' ? 'Editor' : 'Solo lectura'}</p>
+                        </div>
+                        <button 
+                          onClick={handleLogout}
+                          className="p-2 bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors flex items-center gap-2 text-sm"
+                          title="Cerrar sesión"
+                        >
+                          <Icon name="LogOut" className="w-4 h-4" />
+                          <span className="hidden sm:inline">Salir</span>
+                        </button>
+                      </div>
+                    </div>
+                  </header>
+
+                  <main className="max-w-4xl mx-auto mt-8 px-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-1 space-y-6">
+                      <div className={`p-6 rounded-2xl shadow-sm border ${
+                        marcoBalance === 0 ? 'bg-green-50 border-green-200' :
+                        marcoBalance > 0 ? 'bg-blue-50 border-blue-200' : 'bg-orange-50 border-orange-200'
+                      }`}>
+                        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                          Estado de Cuentas
+                        </h2>
+                        {marcoBalance === 0 ? (
+                          <p className="text-xl font-bold text-green-700">¡Cuentas al día!</p>
+                        ) : marcoBalance > 0 ? (
+                          <React.Fragment>
+                            <p className="text-sm text-blue-700">Eliana debe a Marco:</p>
+                            <p className="text-3xl font-bold text-blue-700">{formatMoney(marcoBalance)}</p>
+                          </React.Fragment>
+                        ) : (
+                          <React.Fragment>
+                            <p className="text-sm text-orange-700">Marco debe a Eliana:</p>
+                            <p className="text-3xl font-bold text-orange-700">{formatMoney(marcoBalance)}</p>
+                          </React.Fragment>
+                        )}
+                      </div>
+
+                      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                         <h3 className="text-sm font-semibold text-slate-500 mb-3 flex items-center gap-2">
+                           <Icon name="TrendingUp" className="w-4 h-4" /> Gastos Totales Acumulados
+                         </h3>
+                         <div className="text-2xl font-bold text-slate-800 mb-4">{formatMoney(totalGastado)}</div>
+                         <div className="space-y-2 text-sm">
+                            <div className="flex justify-between border-b border-slate-50 pb-2">
+                              <span className="text-slate-500">Pagado por Marco:</span>
+                              <span className="font-medium">{formatMoney(marcoGastos)}</span>
+                            </div>
+                            <div className="flex justify-between pt-1">
+                              <span className="text-slate-500">Pagado por Eliana:</span>
+                              <span className="font-medium">{formatMoney(elianaGastos)}</span>
+                            </div>
+                         </div>
+                      </div>
+
+                      {currentUser.role === 'editor' && (
+                        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden sticky top-28">
+                          <div className="flex border-b border-slate-100">
+                            <button 
+                              onClick={() => setActiveTab('expense')}
+                              className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${activeTab === 'expense' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                            >
+                              <Icon name="Receipt" className="w-4 h-4" /> Gasto
+                            </button>
+                            <button 
+                              onClick={() => setActiveTab('payment')}
+                              className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 ${activeTab === 'payment' ? 'bg-emerald-50 text-emerald-700 border-b-2 border-emerald-600' : 'text-slate-500 hover:bg-slate-50'}`}
+                            >
+                              <Icon name="ArrowRightLeft" className="w-4 h-4" /> Yape/Pago
+                            </button>
+                          </div>
+
+                          <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 mb-1">¿Quién pagó/yapeó?</label>
+                              <select 
+                                value={paidBy} 
+                                onChange={(e) => setPaidBy(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                              >
+                                <option value="Marco">Marco</option>
+                                <option value="Eliana">Eliana</option>
+                              </select>
+                              {activeTab === 'payment' && (
+                                <p className="text-xs text-slate-400 mt-1">
+                                  (Selecciona quién envió el dinero al otro)
+                                </p>
+                              )}
+                            </div>
+
+                            {activeTab === 'expense' && (
+                              <div>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo de Cobertura</label>
+                                <select 
+                                  value={splitType} 
+                                  onChange={(e) => setSplitType(e.target.value)}
+                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                >
+                                  <option value="shared">Compartido (Mitad y Mitad)</option>
+                                  <option value="individual">Asumido al 100% (No se cobra)</option>
+                                </select>
+                              </div>
+                            )}
+                            
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 mb-1">Monto (S/.)</label>
+                              <input 
+                                type="number" 
+                                step="0.01"
+                                required
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                placeholder="0.00"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 mb-1">Concepto</label>
+                              <input 
+                                type="text" 
+                                required
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder={activeTab === 'expense' ? "Ej. Pasajes, mensualidad..." : "Ej. Yape por pasajes"}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-500 mb-1">Fecha</label>
+                              <input 
+                                type="date" 
+                                required
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </div>
+
+                            <button 
+                              type="submit" 
+                              className={`w-full py-2.5 rounded-lg text-white font-medium text-sm transition-colors flex items-center justify-center gap-2 ${
+                                activeTab === 'expense' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                              }`}
+                            >
+                              <Icon name="PlusCircle" className="w-4 h-4" /> 
+                              Registrar {activeTab === 'expense' ? 'Gasto' : 'Pago'}
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                      
+                      {currentUser.role === 'viewer' && (
+                        <div className="bg-blue-50 text-blue-700 p-4 rounded-xl text-sm border border-blue-100 flex items-start gap-3">
+                          <Icon name="Eye" className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                          <p>Estás en modo lectura. Para registrar o eliminar gastos, debes ingresar con el perfil de Marco.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 h-full">
+                        <div className="flex items-center justify-between mb-6">
+                          <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            Historial de Movimientos
+                          </h2>
+                          <div className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded">
+                            🟢 Sesión segura iniciada
+                          </div>
+                        </div>
+
+                        {isLoading ? (
+                            <div className="text-center py-12 text-slate-400">
+                                <p>Cargando datos desde la nube...</p>
+                            </div>
+                        ) : transactions.length === 0 ? (
+                          <div className="text-center py-12 text-slate-400 border-2 border-dashed border-slate-100 rounded-xl">
+                            <Icon name="Receipt" className="w-12 h-12 mx-auto mb-3 text-slate-200" />
+                            <p>Aún no hay movimientos registrados.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {transactions.map((tx) => (
+                              <div key={tx.id} className="flex items-center justify-between p-4 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors group">
+                                <div className="flex items-center gap-4">
+                                  <div className={`p-3 rounded-full ${tx.type === 'expense' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                    <Icon name={tx.type === 'expense' ? "Receipt" : "ArrowRightLeft"} className="w-5 h-5" />
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-slate-800 text-sm">{tx.description}</p>
+                                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                                      <span>{tx.date}</span>
+                                      <span>•</span>
+                                      {tx.type === 'expense' ? (
+                                        <span className="flex items-center gap-1">
+                                          Pagado por {tx.paidBy}
+                                          {tx.splitType === 'individual' && <span className="ml-1 bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded text-[10px] font-bold">100%</span>}
+                                        </span>
+                                      ) : (
+                                        <span className="flex items-center gap-1">
+                                          <Icon name={tx.paidBy === 'Marco' ? "ArrowUpRight" : "ArrowDownRight"} className={`w-3 h-3 ${tx.paidBy === 'Marco' ? 'text-orange-500' : 'text-blue-500'}`} />
+                                          {tx.paidBy} envió el dinero
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <div className="flex items-center gap-4">
+                                  <div className="text-right">
+                                    <p className="font-bold text-slate-800">{formatMoney(tx.amount)}</p>
+                                    {tx.type === 'expense' && (
+                                      <p className="text-xs text-slate-400 mt-0.5">
+                                        {tx.splitType === 'individual' ? 'Asumido 100%' : `50% = ${formatMoney(tx.amount / 2)}`}
+                                      </p>
+                                    )}
+                                  </div>
+                                  
+                                  {currentUser.role === 'editor' && (
+                                    <button 
+                                      onClick={() => deleteTransaction(tx.id)}
+                                      className="text-slate-300 hover:text-red-500 transition-colors p-2 md:opacity-0 group-hover:opacity-100"
+                                      title="Eliminar movimiento"
+                                    >
+                                      <Icon name="Trash2" className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </main>
+
+                  {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
+                  {txToDelete && (
+                    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                      <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+                        <h3 className="text-xl font-bold text-slate-800 mb-2">Eliminar registro</h3>
+                        <p className="text-slate-600 mb-6 text-sm">¿Estás seguro que deseas eliminar este registro? Esta acción borrará el dato permanentemente de la base de datos.</p>
+                        <div className="flex justify-end gap-3">
+                          <button 
+                            onClick={() => setTxToDelete(null)} 
+                            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                          >
+                            Cancelar
+                          </button>
+                          <button 
+                            onClick={() => confirmDelete(txToDelete)} 
+                            className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors flex items-center gap-2"
+                          >
+                            <Icon name="Trash2" className="w-4 h-4" />
+                            Sí, eliminar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              );
+            }
+
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+        });
+    </script>
+</body>
+</html>
