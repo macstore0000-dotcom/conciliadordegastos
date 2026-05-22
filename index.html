@@ -196,7 +196,7 @@
                 if (!amount || !description || isNaN(amount)) return;
                 if (currentUser?.role !== 'editor' || !firebaseUser) return;
 
-                const newTxId = Date.now().toString();
+                const newTxId = crypto.randomUUID();
                 const newTx = {
                   type: activeTab,
                   paidBy: paidBy,
