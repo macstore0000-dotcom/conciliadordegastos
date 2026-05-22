@@ -15,7 +15,10 @@
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
-        import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+        import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, query, where, getDocs } from '...firebase-firestore.js';
+window.FirebaseSDK = { initializeApp, getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, 
+                       getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, query, where, getDocs }; from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
         
         window.FirebaseSDK = { 
             initializeApp, getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, 
@@ -74,12 +77,12 @@
             // ==========================================
             // MAPEO DE CORREOS A PERFILES Y ROLES
             // ==========================================
-            const PROFILES = {
-              'marcocueva@gmail.com': { id: 'marco', name: 'Marco', role: 'editor' },
-              'eliana@ejemplo.com': { id: 'eliana', name: 'Eliana', role: 'viewer' },
-              'gaby@ejemplo.com': { id: 'guest', name: 'Invitado / Gaby', role: 'viewer' }
-            };
 
+            const { initializeApp, getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, 
+        getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc,
+        query, where, getDocs  // <- agregar estos 3
+} = window.FirebaseSDK;
+            
             function App() {
               const [firebaseUser, setFirebaseUser] = useState(null);
               const [currentUser, setCurrentUser] = useState(null);
@@ -104,19 +107,29 @@
                 if (currentUser?.id === 'eliana') setPaidBy('Eliana');
               }, [currentUser]);
 
-              useEffect(() => {
-                const unsubscribe = onAuthStateChanged(auth, (user) => {
-                  if (user) {
-                    setFirebaseUser(user);
-                    const profileInfo = PROFILES[user.email.toLowerCase()] || { id: 'guest', name: user.email, role: 'viewer' };
-                    setCurrentUser(profileInfo);
-                  } else {
-                    setFirebaseUser(null);
-                    setCurrentUser(null);
-                  }
-                });
-                return () => unsubscribe();
-              }, []);
+             useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      setFirebaseUser(user);
+      try {
+        const q = query(collection(db, 'usuarios'), where('email', '==', user.email.toLowerCase()));
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const data = snapshot.docs[0].data();
+          setCurrentUser({ id: snapshot.docs[0].id, name: data.name, role: data.role });
+        } else {
+          setCurrentUser({ id: 'guest', name: user.email, role: 'viewer' });
+        }
+      } catch {
+        setCurrentUser({ id: 'guest', name: user.email, role: 'viewer' });
+      }
+    } else {
+      setFirebaseUser(null);
+      setCurrentUser(null);
+    }
+  });
+  return () => unsubscribe();
+}, []);
 
               useEffect(() => {
                 if (!firebaseUser) return;
