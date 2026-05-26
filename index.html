@@ -191,20 +191,24 @@
                 };
               }, [firebaseUser]);
 
-              const { totalGastado, marcoBalance, marcoGastos, elianaGastos } = useMemo(() => {
+              const { totalGastado, marcoBalance, marcoGastos, elianaGastos, marcoNeto, elianaNeto } = useMemo(() => {
                 let balance = 0;
                 let mGastos = 0;
                 let eGastos = 0;
+                let mNeto = 0;
+                let eNeto = 0;
 
                 transactions.forEach(t => {
                   const amt = parseFloat(t.amount);
                   if (t.type === 'expense') {
                     if (t.paidBy === 'Marco') {
                       mGastos += amt;
-                      if (t.splitType === 'shared') balance += amt / 2;
+                      if (t.splitType === 'shared') { balance += amt / 2; mNeto += amt / 2; eNeto += amt / 2; }
+                      else { mNeto += amt; }
                     } else {
                       eGastos += amt;
-                      if (t.splitType === 'shared') balance -= amt / 2;
+                      if (t.splitType === 'shared') { balance -= amt / 2; mNeto += amt / 2; eNeto += amt / 2; }
+                      else { eNeto += amt; }
                     }
                   } else if (t.type === 'payment') {
                     if (t.paidBy === 'Eliana') balance -= amt;
@@ -216,7 +220,9 @@
                   totalGastado: mGastos + eGastos,
                   marcoBalance: balance,
                   marcoGastos: mGastos,
-                  elianaGastos: eGastos
+                  elianaGastos: eGastos,
+                  marcoNeto: mNeto,
+                  elianaNeto: eNeto
                 };
               }, [transactions]);
 
@@ -229,19 +235,24 @@
                 });
 
                 let marco = 0, eliana = 0;
+                let marcoNeto = 0, elianaNeto = 0;
                 filtered.forEach(t => {
                   const amt = parseFloat(t.amount);
                   if (t.paidBy === 'Marco') marco += amt;
                   else eliana += amt;
+                  if (t.splitType === 'shared') { marcoNeto += amt / 2; elianaNeto += amt / 2; }
+                  else if (t.paidBy === 'Marco') marcoNeto += amt;
+                  else elianaNeto += amt;
                 });
 
-                return { total: marco + eliana, marco, eliana, items: filtered };
+                return { total: marco + eliana, marco, eliana, marcoNeto, elianaNeto, items: filtered };
               }, [transactions, selectedMonth, selectedYear]);
 
               // Datos del año seleccionado (desglose por mes)
               const yearlyData = useMemo(() => {
-                const months = Array.from({ length: 12 }, () => ({ marco: 0, eliana: 0, total: 0 }));
+                const months = Array.from({ length: 12 }, () => ({ marco: 0, eliana: 0, marcoNeto: 0, elianaNeto: 0, total: 0 }));
                 let totalMarco = 0, totalEliana = 0;
+                let totalMarcoNeto = 0, totalElianaNeto = 0;
 
                 transactions.forEach(t => {
                   if (t.type !== 'expense') return;
@@ -256,10 +267,18 @@
                     months[m].eliana += amt;
                     totalEliana += amt;
                   }
+                  if (t.splitType === 'shared') {
+                    months[m].marcoNeto += amt / 2; months[m].elianaNeto += amt / 2;
+                    totalMarcoNeto += amt / 2; totalElianaNeto += amt / 2;
+                  } else if (t.paidBy === 'Marco') {
+                    months[m].marcoNeto += amt; totalMarcoNeto += amt;
+                  } else {
+                    months[m].elianaNeto += amt; totalElianaNeto += amt;
+                  }
                   months[m].total = months[m].marco + months[m].eliana;
                 });
 
-                return { months, totalMarco, totalEliana, total: totalMarco + totalEliana };
+                return { months, totalMarco, totalEliana, totalMarcoNeto, totalElianaNeto, total: totalMarco + totalEliana };
               }, [transactions, selectedYear]);
 
               // Años disponibles
@@ -279,13 +298,17 @@
 
               const searchSummary = useMemo(() => {
                 let marco = 0, eliana = 0;
+                let marcoNeto = 0, elianaNeto = 0;
                 searchResults.forEach(t => {
                   if (t.type !== 'expense') return;
                   const amt = parseFloat(t.amount);
                   if (t.paidBy === 'Marco') marco += amt;
                   else eliana += amt;
+                  if (t.splitType === 'shared') { marcoNeto += amt / 2; elianaNeto += amt / 2; }
+                  else if (t.paidBy === 'Marco') marcoNeto += amt;
+                  else elianaNeto += amt;
                 });
-                return { total: marco + eliana, marco, eliana, count: searchResults.length };
+                return { total: marco + eliana, marco, eliana, marcoNeto, elianaNeto, count: searchResults.length };
               }, [searchResults]);
 
               const handleLogin = async (e) => {
@@ -499,14 +522,26 @@
                            <Icon name="TrendingUp" className="w-4 h-4" /> Gastos Totales Acumulados
                          </h3>
                          <div className="text-2xl font-bold text-slate-800 mb-4">{formatMoney(totalGastado)}</div>
-                         <div className="space-y-2 text-sm">
+                         <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Desembolso (quién pagó)</p>
+                         <div className="space-y-2 text-sm mb-4">
                             <div className="flex justify-between border-b border-slate-50 pb-2">
-                              <span className="text-slate-500">Pagado por Marco:</span>
+                              <span className="text-slate-500">Marco:</span>
                               <span className="font-medium">{formatMoney(marcoGastos)}</span>
                             </div>
                             <div className="flex justify-between pt-1">
-                              <span className="text-slate-500">Pagado por Eliana:</span>
+                              <span className="text-slate-500">Eliana:</span>
                               <span className="font-medium">{formatMoney(elianaGastos)}</span>
+                            </div>
+                         </div>
+                         <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Costo neto (quién lo asumió)</p>
+                         <div className="space-y-2 text-sm">
+                            <div className="flex justify-between border-b border-slate-50 pb-2">
+                              <span className="text-slate-500">Marco:</span>
+                              <span className="font-medium text-blue-700">{formatMoney(marcoNeto)}</span>
+                            </div>
+                            <div className="flex justify-between pt-1">
+                              <span className="text-slate-500">Eliana:</span>
+                              <span className="font-medium text-orange-700">{formatMoney(elianaNeto)}</span>
                             </div>
                          </div>
                       </div>
@@ -736,18 +771,18 @@
                             <p className="text-xs text-slate-400 mt-1">{monthlyData.items.length} gasto(s)</p>
                           </div>
                           <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
-                            <p className="text-xs font-semibold uppercase text-blue-600 mb-1">Pagado por Marco</p>
-                            <p className="text-2xl font-bold text-blue-700">{formatMoney(monthlyData.marco)}</p>
-                            <p className="text-xs text-blue-500 mt-1">
-                              {monthlyData.total > 0 ? `${((monthlyData.marco / monthlyData.total) * 100).toFixed(1)}%` : '0%'} del total
-                            </p>
+                            <p className="text-xs font-semibold uppercase text-blue-600 mb-1">Marco</p>
+                            <p className="text-[10px] text-blue-500 mt-1">Desembolso</p>
+                            <p className="text-xl font-bold text-blue-700">{formatMoney(monthlyData.marco)}</p>
+                            <p className="text-[10px] text-blue-500 mt-2">Costo neto</p>
+                            <p className="text-xl font-bold text-blue-700">{formatMoney(monthlyData.marcoNeto)}</p>
                           </div>
                           <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
-                            <p className="text-xs font-semibold uppercase text-orange-600 mb-1">Pagado por Eliana</p>
-                            <p className="text-2xl font-bold text-orange-700">{formatMoney(monthlyData.eliana)}</p>
-                            <p className="text-xs text-orange-500 mt-1">
-                              {monthlyData.total > 0 ? `${((monthlyData.eliana / monthlyData.total) * 100).toFixed(1)}%` : '0%'} del total
-                            </p>
+                            <p className="text-xs font-semibold uppercase text-orange-600 mb-1">Eliana</p>
+                            <p className="text-[10px] text-orange-500 mt-1">Desembolso</p>
+                            <p className="text-xl font-bold text-orange-700">{formatMoney(monthlyData.eliana)}</p>
+                            <p className="text-[10px] text-orange-500 mt-2">Costo neto</p>
+                            <p className="text-xl font-bold text-orange-700">{formatMoney(monthlyData.elianaNeto)}</p>
                           </div>
                         </div>
                       </div>
@@ -807,11 +842,17 @@
                           </div>
                           <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
                             <p className="text-xs font-semibold uppercase text-blue-600 mb-1">Marco</p>
-                            <p className="text-2xl font-bold text-blue-700">{formatMoney(yearlyData.totalMarco)}</p>
+                            <p className="text-[10px] text-blue-500 mt-1">Desembolso</p>
+                            <p className="text-xl font-bold text-blue-700">{formatMoney(yearlyData.totalMarco)}</p>
+                            <p className="text-[10px] text-blue-500 mt-2">Costo neto</p>
+                            <p className="text-xl font-bold text-blue-700">{formatMoney(yearlyData.totalMarcoNeto)}</p>
                           </div>
                           <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
                             <p className="text-xs font-semibold uppercase text-orange-600 mb-1">Eliana</p>
-                            <p className="text-2xl font-bold text-orange-700">{formatMoney(yearlyData.totalEliana)}</p>
+                            <p className="text-[10px] text-orange-500 mt-1">Desembolso</p>
+                            <p className="text-xl font-bold text-orange-700">{formatMoney(yearlyData.totalEliana)}</p>
+                            <p className="text-[10px] text-orange-500 mt-2">Costo neto</p>
+                            <p className="text-xl font-bold text-orange-700">{formatMoney(yearlyData.totalElianaNeto)}</p>
                           </div>
                         </div>
 
@@ -819,27 +860,37 @@
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="text-left border-b border-slate-200">
-                                <th className="py-2 px-3 font-semibold text-slate-600">Mes</th>
-                                <th className="py-2 px-3 font-semibold text-blue-600 text-right">Marco</th>
-                                <th className="py-2 px-3 font-semibold text-orange-600 text-right">Eliana</th>
-                                <th className="py-2 px-3 font-semibold text-slate-600 text-right">Total</th>
+                              <tr className="text-left border-b-2 border-slate-200">
+                                <th rowSpan="2" className="py-2 px-3 font-semibold text-slate-600 align-bottom">Mes</th>
+                                <th colSpan="2" className="py-2 px-3 font-semibold text-slate-500 text-center text-xs border-l border-slate-100">Desembolso</th>
+                                <th colSpan="2" className="py-2 px-3 font-semibold text-slate-500 text-center text-xs border-l border-slate-100">Costo neto</th>
+                                <th rowSpan="2" className="py-2 px-3 font-semibold text-slate-600 text-right align-bottom border-l border-slate-100">Total</th>
+                              </tr>
+                              <tr className="text-left border-b border-slate-200 text-xs">
+                                <th className="py-1.5 px-3 font-semibold text-blue-600 text-right border-l border-slate-100">Marco</th>
+                                <th className="py-1.5 px-3 font-semibold text-orange-600 text-right">Eliana</th>
+                                <th className="py-1.5 px-3 font-semibold text-blue-600 text-right border-l border-slate-100">Marco</th>
+                                <th className="py-1.5 px-3 font-semibold text-orange-600 text-right">Eliana</th>
                               </tr>
                             </thead>
                             <tbody>
                               {yearlyData.months.map((m, i) => (
                                 <tr key={i} className={`border-b border-slate-50 ${m.total === 0 ? 'text-slate-300' : 'text-slate-700'}`}>
                                   <td className="py-2.5 px-3 font-medium">{MONTH_NAMES[i]}</td>
-                                  <td className="py-2.5 px-3 text-right">{formatMoney(m.marco)}</td>
+                                  <td className="py-2.5 px-3 text-right border-l border-slate-100">{formatMoney(m.marco)}</td>
                                   <td className="py-2.5 px-3 text-right">{formatMoney(m.eliana)}</td>
-                                  <td className="py-2.5 px-3 text-right font-semibold">{formatMoney(m.total)}</td>
+                                  <td className="py-2.5 px-3 text-right border-l border-slate-100">{formatMoney(m.marcoNeto)}</td>
+                                  <td className="py-2.5 px-3 text-right">{formatMoney(m.elianaNeto)}</td>
+                                  <td className="py-2.5 px-3 text-right font-semibold border-l border-slate-100">{formatMoney(m.total)}</td>
                                 </tr>
                               ))}
                               <tr className="bg-slate-50 font-bold">
                                 <td className="py-2.5 px-3">Total</td>
-                                <td className="py-2.5 px-3 text-right text-blue-700">{formatMoney(yearlyData.totalMarco)}</td>
+                                <td className="py-2.5 px-3 text-right text-blue-700 border-l border-slate-100">{formatMoney(yearlyData.totalMarco)}</td>
                                 <td className="py-2.5 px-3 text-right text-orange-700">{formatMoney(yearlyData.totalEliana)}</td>
-                                <td className="py-2.5 px-3 text-right text-slate-800">{formatMoney(yearlyData.total)}</td>
+                                <td className="py-2.5 px-3 text-right text-blue-700 border-l border-slate-100">{formatMoney(yearlyData.totalMarcoNeto)}</td>
+                                <td className="py-2.5 px-3 text-right text-orange-700">{formatMoney(yearlyData.totalElianaNeto)}</td>
+                                <td className="py-2.5 px-3 text-right text-slate-800 border-l border-slate-100">{formatMoney(yearlyData.total)}</td>
                               </tr>
                             </tbody>
                           </table>
@@ -868,22 +919,42 @@
                         </div>
 
                         {searchTerm.trim() && (
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
-                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                              <p className="text-xs text-slate-500">Resultados</p>
-                              <p className="text-lg font-bold text-slate-800">{searchSummary.count}</p>
+                          <div className="mt-5 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                <p className="text-xs text-slate-500">Resultados</p>
+                                <p className="text-lg font-bold text-slate-800">{searchSummary.count}</p>
+                              </div>
+                              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                <p className="text-xs text-slate-500">Total gastos</p>
+                                <p className="text-lg font-bold text-slate-800">{formatMoney(searchSummary.total)}</p>
+                              </div>
                             </div>
-                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                              <p className="text-xs text-slate-500">Total gastos</p>
-                              <p className="text-lg font-bold text-slate-800">{formatMoney(searchSummary.total)}</p>
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Desembolso (quién pagó)</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                  <p className="text-xs text-blue-600">Marco</p>
+                                  <p className="text-lg font-bold text-blue-700">{formatMoney(searchSummary.marco)}</p>
+                                </div>
+                                <div className="bg-orange-50 p-3 rounded-xl border border-orange-100">
+                                  <p className="text-xs text-orange-600">Eliana</p>
+                                  <p className="text-lg font-bold text-orange-700">{formatMoney(searchSummary.eliana)}</p>
+                                </div>
+                              </div>
                             </div>
-                            <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
-                              <p className="text-xs text-blue-600">Marco</p>
-                              <p className="text-lg font-bold text-blue-700">{formatMoney(searchSummary.marco)}</p>
-                            </div>
-                            <div className="bg-orange-50 p-3 rounded-xl border border-orange-100">
-                              <p className="text-xs text-orange-600">Eliana</p>
-                              <p className="text-lg font-bold text-orange-700">{formatMoney(searchSummary.eliana)}</p>
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Costo neto (quién lo asumió)</p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                  <p className="text-xs text-blue-600">Marco</p>
+                                  <p className="text-lg font-bold text-blue-700">{formatMoney(searchSummary.marcoNeto)}</p>
+                                </div>
+                                <div className="bg-orange-50 p-3 rounded-xl border border-orange-100">
+                                  <p className="text-xs text-orange-600">Eliana</p>
+                                  <p className="text-lg font-bold text-orange-700">{formatMoney(searchSummary.elianaNeto)}</p>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         )}
