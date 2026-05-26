@@ -296,6 +296,23 @@
                 return transactions.filter(t => (t.description || '').toLowerCase().includes(term));
               }, [transactions, searchTerm]);
 
+              // Lista de conceptos únicos con total y conteo
+              const conceptList = useMemo(() => {
+                const map = new Map();
+                transactions.forEach(t => {
+                  if (t.type !== 'expense') return;
+                  const label = (t.description || '').trim();
+                  if (!label) return;
+                  const key = label.toLowerCase();
+                  const amt = parseFloat(t.amount);
+                  const entry = map.get(key) || { label, total: 0, count: 0 };
+                  entry.total += amt;
+                  entry.count += 1;
+                  map.set(key, entry);
+                });
+                return Array.from(map.values()).sort((a, b) => b.total - a.total);
+              }, [transactions]);
+
               const searchSummary = useMemo(() => {
                 let marco = 0, eliana = 0;
                 let marcoNeto = 0, elianaNeto = 0;
@@ -962,35 +979,63 @@
 
                       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                         {!searchTerm.trim() ? (
-                          <div className="text-center py-10 text-slate-400">
-                            <Icon name="Search" className="w-12 h-12 mx-auto mb-3 text-slate-200" />
-                            <p>Escribe un concepto para buscar.</p>
-                          </div>
+                          conceptList.length === 0 ? (
+                            <div className="text-center py-10 text-slate-400">
+                              <Icon name="Search" className="w-12 h-12 mx-auto mb-3 text-slate-200" />
+                              <p>Aún no hay conceptos registrados.</p>
+                            </div>
+                          ) : (
+                            <div>
+                              <h3 className="font-bold text-slate-800 mb-1 text-sm">Conceptos registrados</h3>
+                              <p className="text-xs text-slate-500 mb-4">Haz clic en un concepto para ver su detalle ({conceptList.length} en total).</p>
+                              <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
+                                {conceptList.map((c, i) => (
+                                  <button
+                                    key={i}
+                                    onClick={() => setSearchTerm(c.label)}
+                                    className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-blue-50 hover:border-blue-200 transition-colors text-left"
+                                  >
+                                    <div>
+                                      <p className="font-medium text-sm text-slate-800">{c.label}</p>
+                                      <p className="text-xs text-slate-500">{c.count} movimiento{c.count !== 1 ? 's' : ''}</p>
+                                    </div>
+                                    <p className="font-bold text-sm text-slate-800">{formatMoney(c.total)}</p>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )
                         ) : searchResults.length === 0 ? (
-                          <div className="text-center py-10 text-slate-400 border-2 border-dashed border-slate-100 rounded-xl">
-                            <p>Sin coincidencias para "{searchTerm}".</p>
-                          </div>
+                          <React.Fragment>
+                            <button onClick={() => setSearchTerm('')} className="text-xs text-blue-600 hover:underline mb-3">← Volver al listado</button>
+                            <div className="text-center py-10 text-slate-400 border-2 border-dashed border-slate-100 rounded-xl">
+                              <p>Sin coincidencias para "{searchTerm}".</p>
+                            </div>
+                          </React.Fragment>
                         ) : (
-                          <div className="space-y-2">
-                            {searchResults.map(tx => (
-                              <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
-                                <div className="flex items-center gap-3">
-                                  <div className={`p-2 rounded-full ${tx.type === 'expense' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                                    <Icon name={tx.type === 'expense' ? "Receipt" : "ArrowRightLeft"} className="w-4 h-4" />
-                                  </div>
-                                  <div>
-                                    <p className="font-medium text-sm text-slate-800">{tx.description}</p>
-                                    <p className="text-xs text-slate-500">
-                                      {tx.date} · {tx.paidBy}
-                                      {tx.type === 'expense' && tx.splitType === 'individual' && ' · 100%'}
-                                      {tx.type === 'payment' && ' · Pago/Yape'}
-                                    </p>
-                                  </div>
+                          <React.Fragment>
+                            <button onClick={() => setSearchTerm('')} className="text-xs text-blue-600 hover:underline mb-3">← Volver al listado</button>
+                            <div className="space-y-2">
+                              {searchResults.map(tx => (
+                                <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-full ${tx.type === 'expense' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                      <Icon name={tx.type === 'expense' ? "Receipt" : "ArrowRightLeft"} className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                      <p className="font-medium text-sm text-slate-800">{tx.description}</p>
+                                      <p className="text-xs text-slate-500">
+                                        {tx.date} · {tx.paidBy}
+                                        {tx.type === 'expense' && tx.splitType === 'individual' && ' · 100%'}
+                                        {tx.type === 'payment' && ' · Pago/Yape'}
+                                      </p>
+                                    </div>
                                 </div>
                                 <p className="font-bold text-sm text-slate-800">{formatMoney(tx.amount)}</p>
                               </div>
                             ))}
                           </div>
+                          </React.Fragment>
                         )}
                       </div>
                     </main>
